@@ -93,3 +93,48 @@ create policy "stylo own files write" on storage.objects for insert
   with check (bucket_id = 'stylo' and (storage.foldername(name))[1] = auth.uid()::text);
 create policy "stylo own files delete" on storage.objects for delete
   using (bucket_id = 'stylo' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- ---------------- Catalog (filled by the `catalog` edge function) ----------------
+create table if not exists public.products (
+  id text primary key,                 -- "{store host}:{shopify product id}"
+  source text not null, brand text, title text not null, url text not null,
+  image text not null, images jsonb default '[]'::jsonb,
+  price numeric not null, compare_at numeric,
+  category text not null,              -- shirt, tshirt, polo, kurta, blazer, coat, jacket, sweater, jeans, chinos, trousers, cargo, joggers, shorts, sneakers, loafers, formal, boots, sandals, mojari
+  slot text not null check (slot in ('top','bottom','layer','shoes')),
+  color_name text, color_hex text, fit text, fabric text,
+  occasions text[] default '{}',       -- office, casual, party, ethnic, resort, winter
+  sizes text[] default '{}', available boolean default true,
+  updated_at timestamptz default now()
+);
+create index if not exists products_slot_idx on public.products (slot, category);
+create index if not exists products_occ_idx on public.products using gin (occasions);
+alter table public.products enable row level security;
+drop policy if exists "catalog is public" on public.products;
+create policy "catalog is public" on public.products for select using (true);   -- writes only via service role (edge function)
+
+create table if not exists public.catalog_meta (id int primary key, last_sync timestamptz, total int, report jsonb);
+alter table public.catalog_meta enable row level security;
+drop policy if exists "catalog meta is public" on public.catalog_meta;
+create policy "catalog meta is public" on public.catalog_meta for select using (true);
+
+-- ---------------- Outfit ratings: every combination we score, per user + situation ----------------
+create table if not exists public.outfit_ratings (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users on delete cascade default auth.uid(),
+  outfit_key text not null,            -- sorted product ids
+  situation text not null,
+  items jsonb not null,
+  local_score numeric,                 -- on-device scorer, 0..10
+  breakdown jsonb,                     -- palette / harmony / body fit / occasion / taste / size
+  reasons jsonb,
+  ai_score numeric,                    -- Gemini stylist judge, 0..10
+  ai_verdict text, ai_tip text,
+  final_score numeric,
+  created_at timestamptz default now(),
+  unique (user_id, outfit_key, situation)
+);
+create index if not exists ratings_user_idx on public.outfit_ratings (user_id, situation, final_score desc);
+alter table public.outfit_ratings enable row level security;
+drop policy if exists "own rows" on public.outfit_ratings;
+create policy "own rows" on public.outfit_ratings for all using (user_id = auth.uid()) with check (user_id = auth.uid());
