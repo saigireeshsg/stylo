@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useApp } from '../state';
 import { compressImage, insert, remove, Row } from '../lib/store';
 import { analyzePhoto, loadModels, PhotoKind, PhotoAnalysis } from '../lib/vision';
-import { MeasureOverlay, Sheet } from '../ui';
+import { MeasureOverlay, Sheet, Icon } from '../ui';
 
 export function PhotoUploader() {
   const { profile, photos, refresh, toast } = useApp();
@@ -25,7 +25,7 @@ export function PhotoUploader() {
   const slot = (kind: PhotoKind | undefined, label: string) => (
     <label className="slot">
       <input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) add(f, kind); e.target.value = ''; }} />
-      <span className="slot-icon">＋</span><span>{label}</span>
+      <Icon name="camera" size={26} /><span>{label}</span>
     </label>
   );
 
@@ -42,11 +42,11 @@ export function PhotoUploader() {
         {slot('side', 'Side photo')}
         {photos.length >= 2 && slot(undefined, 'Another photo')}
       </div>
-      {busy && <div className="busy"><span className="spinner" />{busy}</div>}
-      <Sheet open={!!view} onClose={() => setView(null)} title={`${view?.kind} photo: how we measured`}>
+      {busy && <div className="busy card"><span className="spinner" />{busy}</div>}
+      <Sheet open={!!view} onClose={() => setView(null)} title={view?.kind === 'side' ? 'Side photo · how we measured' : 'Front photo · how we measured'}>
         {view && <>
           <MeasureOverlay src={view.url!} analysis={view.analysis} />
-          {view.analysis?.issues?.length ? <ul className="issues">{view.analysis.issues.map((i: string) => <li key={i}>⚠ {i}</li>)}</ul> : <p className="muted">✓ Good photo. Every keypoint is visible.</p>}
+          {view.analysis?.issues?.length ? <ul className="issues">{view.analysis.issues.map((i: string) => <li key={i}>⚠ {i}</li>)}</ul> : <p className="small" style={{ color: 'var(--good)' }}>✓ Good photo. Every keypoint is visible.</p>}
           <p className="muted small">Scale: {(view.analysis?.cmPerPx * 10).toFixed(2)} mm per pixel, from your height of {profile?.height_cm} cm. Photo quality: {Math.round((view.analysis?.quality ?? 0) * 100)}%.</p>
           <button className="danger" onClick={async () => { await remove('photos', view); setView(null); await refresh(); }}>Delete photo</button>
         </>}

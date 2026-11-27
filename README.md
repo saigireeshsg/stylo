@@ -2,13 +2,16 @@
 
 A mobile-first PWA. Upload 2–3 full-body photos and the app works out your **height-scaled body measurements, sizes, body shape and skin-tone colour palette on the device**. It then recommends outfits, judges Myntra and Ajio screenshots, shows **virtual try-ons on your own photo**, and explains everything in a chat with a stylist.
 
-## Outfit Studio (main screen)
-- **See yourself** in a full outfit (layer, top, bottom, shoes): one Gemini image call with your best front photo plus each garment image.
-- **Scenes**: Studio, Tropical beach, Office, Indian wedding, Café date, City street, Rooftop night, Hill station, or type any place ("sunset cruise in Goa"). The scene sets the occasion, so the stylist picks clothes that suit it, and the background of the try-on.
-- **Price tags pinned to each garment**: MediaPipe pose runs on the generated image (on device) to find the chest, thigh, feet and arm.
-- **Swap any piece**: alternatives are ranked by your palette and their harmony with the rest of the outfit. Your saved Myntra/Ajio screenshots can be mixed in.
-- **"Another"** cycles the stylist's next pick. **Buy outfit** lists each piece with your size and a store link. Rate a look (1–5 ★) and the recommender learns from it.
-- Every render is cached per outfit and scene in `tryons`, so revisiting doesn't use up Gemini quota.
+## How it works
+1. **Overview → sign in → onboarding** (about you, 2 photos, your style guide). The style guide covers sizes, body shape, colour season and palette, with a confidence level on every number.
+2. **Pick a situation**: Office, Everyday casual, Date & party, Wedding & festive, Beach & vacation, Winter & travel.
+3. **Every combination rated.** The app shortlists the best real pieces per slot for *you* (tops, bottoms, shoes, optional blazer/jacket), enumerates every top × bottom × shoes (× layer) combination and scores each 0–10 on your palette, colour harmony, occasion formality, body fit, learned taste, size stock and budget, with plain-language reasons.
+4. **Stylist ratings.** Gemini judges the top 12 as a senior menswear stylist and gives a score, a verdict and a tip. The final score blends both. All ratings are stored per user and situation (`outfit_ratings`).
+5. **Build your own / mix & match.** Browse real products by category. "Wear" swaps a piece into the look, and "+ Mix" adds it to a set; every permutation of your picks is then rated and ranked.
+6. **Preview on me.** A full-body try-on on your own photo, in a scene that matches the situation, with price tags pinned to each garment (pose detection on the generated image), a total price and buy links to each brand's store.
+
+## Real catalog (no paid APIs)
+The `catalog` Supabase Edge Function pulls live product feeds from Indian menswear brands on Shopify (Blackberrys, Andamen, The Bear House, Mr Button, Rare Rabbit, Powerlook, Offduty, Beyours, Urban Monkey, Jaywalking, Nicobar, Neeman's, Bacca Bucci, Monkstory and more). It classifies each item by category, slot, colour, fit, fabric and occasions, and upserts it into `products` (~6,000 items). It refreshes nightly with `pg_cron`, and also proxies product images so the try-on model can use them. For a demo, check each brand's terms before any commercial use.
 
 ## What runs where (₹0 setup, only a Gemini key)
 
@@ -21,7 +24,7 @@ A mobile-first PWA. Upload 2–3 full-body photos and the app works out your **h
 | Virtual try-on | Gemini image model (`gemini-2.5-flash-image`) | Gemini key (the free tier is rate-limited) |
 | Explain-only stylist chat | Gemini text model with the user's profile as context | Gemini key |
 | Login, photos, history | Supabase Auth + Postgres + private Storage bucket, **or** IndexedDB on the device if Supabase isn't configured | Free tier |
-| Catalog | Built-in demo items + `npm run sync-catalog` (public Shopify `/products.json` feeds of Indian D2C brands) | Free |
+| Catalog | Supabase Edge Function syncing live brand feeds nightly into `products` | Free tier |
 
 ## Run it
 
@@ -38,12 +41,6 @@ The phone camera and PWA install need HTTPS. For a phone demo, deploy `dist/` to
 2. Auth → Providers: enable **Email** (turn off "Confirm email" for demos) and **Anonymous** (for the "Continue as guest" option).
 3. Put the URL and anon key in `.env`, or paste them in-app under **Me → Settings**.
 
-### Real products
-```bash
-npm run sync-catalog                     # writes public/catalog.json
-STORES=www.snitch.com,example.in npm run sync-catalog
-```
-Stores that aren't Shopify are skipped. It's for a demo only, so check each brand's terms before any production use.
 
 ## The measurement algorithm (src/lib/vision.ts, src/lib/body.ts)
 1. **Person mask** from the segmenter, then pixel height = top of the head to the floor contact point.

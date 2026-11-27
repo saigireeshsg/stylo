@@ -138,3 +138,10 @@ create index if not exists ratings_user_idx on public.outfit_ratings (user_id, s
 alter table public.outfit_ratings enable row level security;
 drop policy if exists "own rows" on public.outfit_ratings;
 create policy "own rows" on public.outfit_ratings for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- ---------------- Nightly catalog refresh (2:47 AM IST) ----------------
+create extension if not exists pg_net with schema extensions;
+create extension if not exists pg_cron;
+-- replace <project-ref> with your project ref
+-- select cron.schedule('stylo-catalog-sync', '17 21 * * *',
+--   $$select net.http_get(url := 'https://<project-ref>.supabase.co/functions/v1/catalog?action=sync', timeout_milliseconds := 140000)$$);

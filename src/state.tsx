@@ -5,20 +5,25 @@ import type { BodyProfile } from './lib/body';
 import type { ColorProfile } from './lib/color';
 import type { Taste } from './lib/recommend';
 
+export type Tab = 'home' | 'looks' | 'saved' | 'me' | 'chat';
+export interface Route { situation?: string; seed?: Product[]; nonce?: number }
+
 export interface AppState {
   profile: Profile | null;
   body: BodyProfile | null;
   color: ColorProfile | null;
   photos: Row[];
   catalog: Product[];
+  catalogReady: boolean;
   interactions: Row[];
   taste: Taste;
   refresh: () => Promise<void>;
   toast: (msg: string) => void;
-  startTryOn: (items: Product[] | null, saved?: Row, sceneId?: string) => void;
   go: (tab: Tab) => void;
-  studioSeed: { items?: Product[]; sceneId?: string; nonce: number } | null;
+  /** Open a situation (Office, Casual…), optionally seeded with pieces to wear. */
+  openSituation: (id: string, seed?: Product[]) => void;
+  route: Route;
+  closeSituation: () => void;
 }
-export type Tab = 'studio' | 'style' | 'saved' | 'tryon' | 'chat' | 'me';
 export const Ctx = createContext<AppState>(null as any);
 export const useApp = () => useContext(Ctx);

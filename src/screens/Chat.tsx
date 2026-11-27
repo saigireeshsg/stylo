@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../state';
 import { chat, ChatTurn } from '../lib/gemini';
 import { insert, list } from '../lib/store';
-import { recommend } from '../lib/recommend';
+import { rateAll, SITUATIONS } from '../lib/recommend';
+import { Icon } from '../ui';
 
 const SUGGESTIONS = (size?: string) => [`Why am I a size ${size ?? 'M'}?`, 'Which colours suit me and why?', 'How accurate are my measurements?', 'What should I wear to an office party?', 'Is my data private?'];
 
 export function Chat() {
-  const { body, color, catalog, taste, profile, photos } = useApp();
+  const { body, color, catalog, taste, profile, photos, go } = useApp();
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -18,7 +19,7 @@ export function Chat() {
   useEffect(() => { end.current?.scrollIntoView({ behavior: 'smooth' }); }, [turns, busy]);
 
   const system = () => {
-    const recs = recommend(catalog, body, color, taste, 'daily', 5000, 3).map((o) => `${o.items.map((i) => i.title).join(' + ')} (${Math.round(o.score * 100)}%: ${o.reasons.join('; ')})`);
+    const recs = SITUATIONS.slice(0, 3).map((sit) => { const l = rateAll(catalog, sit, color, body, taste, 9000).looks[0]; return l ? `${sit.label}: ${l.items.map((i) => `${i.brand} ${i.title} (₹${i.price})`).join(' + ')} scored ${l.score}/10 because ${l.reasons.join('; ')}` : ''; }).filter(Boolean);
     const likes = Object.entries(taste.colors).sort((a, b) => b[1] - a[1]);
     return `You are Stylo, a friendly men's personal stylist for Indian men. You ONLY explain; you never take actions, place orders, change data or promise anything.
 Talk like a helpful friend: simple words, short answers (2-5 sentences or a few bullets), no jargon unless you explain it. Use cm and inches, and ₹ for prices.
@@ -51,7 +52,7 @@ ${JSON.stringify({
 
   return (
     <div className="page chat">
-      <h1>Ask your stylist</h1>
+      <div className="row gap"><button className="icon-btn" onClick={() => go('home')} aria-label="Back"><Icon name="back" /></button><div className="col"><span className="eyebrow">Stylo</span><h2>Ask your stylist</h2></div></div>
       <div className="msgs">
         {!turns.length && <p className="muted">Ask anything about your sizes, your colours, or why an outfit was picked. I'll explain simply and tell you how sure I am.</p>}
         {turns.map((t, i) => <div key={i} className={`msg ${t.role}`}>{t.text}</div>)}
@@ -61,7 +62,7 @@ ${JSON.stringify({
       <div className="chips">{SUGGESTIONS(body?.sizes.top).map((s) => <button key={s} className="chip" onClick={() => send(s)}>{s}</button>)}</div>
       <form className="composer" onSubmit={(e) => { e.preventDefault(); send(text); }}>
         <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Ask about fit, colours, sizes…" />
-        <button className="primary" disabled={busy}>Send</button>
+        <button className="primary pill" disabled={busy}>Send</button>
       </form>
     </div>
   );

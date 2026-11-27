@@ -3,7 +3,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { getConfig } from './config';
 
-export type Collection = 'photos' | 'saved_items' | 'tryons' | 'interactions' | 'chat_messages';
+export type Collection = 'photos' | 'saved_items' | 'tryons' | 'interactions' | 'chat_messages' | 'outfit_ratings';
 export interface Row { id: string; created_at: string; path?: string | null; url?: string; [k: string]: any }
 export interface Profile { id?: string; name?: string; height_cm?: number; anchors?: any; body?: any; color?: any; prefs?: any; updated_at?: string }
 
@@ -21,9 +21,10 @@ const BUCKET = 'stylo';
 const DB = 'stylo-local';
 function idb(): Promise<IDBDatabase> {
   return new Promise((res, rej) => {
-    const r = indexedDB.open(DB, 1);
+    const r = indexedDB.open(DB, 2);
     r.onupgradeneeded = () => {
-      for (const s of ['photos', 'saved_items', 'tryons', 'interactions', 'chat_messages', 'profile', 'blobs']) r.result.createObjectStore(s, { keyPath: 'id' });
+      for (const s of ['photos', 'saved_items', 'tryons', 'interactions', 'chat_messages', 'outfit_ratings', 'profile', 'blobs'])
+        if (!r.result.objectStoreNames.contains(s)) r.result.createObjectStore(s, { keyPath: 'id' });
     };
     r.onsuccess = () => res(r.result);
     r.onerror = () => rej(r.error);
@@ -133,6 +134,15 @@ export async function remove(col: Collection, row: Row) {
   if (!s) { await idbOp(col, 'readwrite', (st) => st.delete(row.id)); if (row.path) await idbOp('blobs', 'readwrite', (st) => st.delete(row.path!)); return; }
   if (row.path) await s.storage.from(BUCKET).remove([row.path]);
   const { error } = await s.from(col).delete().eq('id', row.id); if (error) throw error;
+}
+
+/** Save outfit ratings (one row per user + outfit + situation; re-rating updates it). */
+export async function upsertRatings(rows: Record<string, any>[]) {
+  const s = supabase(); const user_id = (await currentUserId())!;
+  if (!rows.length) return;
+  if (!s) { for (const r of rows) await idbOp('outfit_ratings', 'readwrite', (st) => st.put({ ...r, user_id, id: `${r.situation}|${r.outfit_key}`, created_at: new Date().toISOString() })); return; }
+  const { error } = await s.from('outfit_ratings').upsert(rows.map((r) => ({ ...r, user_id })), { onConflict: 'user_id,outfit_key,situation' });
+  if (error) throw error;
 }
 
 /** Downscale + JPEG-compress before storing (phone photos are often 4–8 MB → ~200 KB). */
